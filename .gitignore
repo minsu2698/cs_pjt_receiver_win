@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Conda virtual env
+env/
+.venv/
+*.conda
+
+# VSCode & Jupyter
+.vscode/
+.ipynb_checkpoints/
+
+# System
+.DS_Store
+Thumbs.db
+
+# Output logs or data
+received_data/
+
+# OS
+*.swp
