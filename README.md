@@ -1,4 +1,4 @@
-# 🔧 rev_from_docker
+# 🔧 REV_FROM_DOCKER
 
 Edge 디바이스(Ubuntu+Docker)에서 YOLO(Object Detection) 및 SED(Sound Event Detection)를 통해 추론 결과를 FastAPI 기반으로 전송하고, 노트북(Receiver, Core 역할 / Windows + Anaconda 환경)이 이를 수신하여 저장/처리하는 시스템입니다.
 
