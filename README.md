@@ -1,6 +1,6 @@
 # 🔧 REV_FROM_DOCKER
 
-Edge 디바이스(Ubuntu+Docker)에서 YOLO(Object Detection) 및 SED(Sound Event Detection)를 통해 추론 결과를 FastAPI 기반으로 전송하고, 노트북(Receiver, Core 역할 / Windows + Anaconda 환경)이 이를 수신하여 저장/처리하는 시스템입니다.
+Edge 디바이스(Ubuntu+Docker)에서 YOLO(Object Detection) 및 SED(Sound Event Detection)를 통해 추론 결과를 FastAPI 기반으로 전송하고, 노트북(Receiver, Core 역할 / Windows + Anaconda 환경)이 이를 수신하여 Fusion 및 실시간 팝업 알림을 제공하는 Core 시스템입니다.
 
 
 ---
@@ -8,13 +8,19 @@ Edge 디바이스(Ubuntu+Docker)에서 YOLO(Object Detection) 및 SED(Sound Even
 ## 📦 프로젝트 구조
 
 ```
-rev_from_docker/
-├── main.py                  # FastAPI 수신 서버 (YOLO + SED 결과 처리)
-├── requirements.txt         # Conda 환경용 패키지 목록
-├── .gitignore               # Git 추적 제외 파일 목록
-└── received_from_sender/
-    ├── video/               # 수신된 영상 프레임 저장
-    └── audio/               # 수신된 오디오 WAV 저장
+cs_pjt_receiver_win/
+├── main.py                  # FastAPI 기반 수신 서버
+├── alert_watcher.py         # 실시간 알림 팝업 시스템
+├── requirements.txt         # 의존성 목록
+├── .gitignore               # Git 무시 파일 목록
+├── README.md                # 프로젝트 설명서
+├── received_from_sender/    # 수신된 데이터 저장 폴더
+│   ├── audio/               # 오디오 파일 저장 (.gitkeep 포함)
+│   ├── video/               # 비디오 파일 저장 (.gitkeep 포함)
+│   ├── image/               # 이미지 파일 저장 (.gitkeep 포함)
+│   ├── metadata/            # 메타데이터 저장 (.gitkeep 포함)
+│   └── alerts/              # 알림 JSON 및 이미지 저장 (.gitkeep 포함)
+└── __pycache__/             # Python 캐시 파일 (자동 생성)
 ```
 
 ---
@@ -86,20 +92,71 @@ uvicorn main:app --host 0.0.0.0 --port 8000
 
 ---
 
+
+### 4. 실시간 Pop up 알림 구동
+
+```bash
+python alert_watcher.py
+```
+
+---
+
+
 ## 🛰️ 시스템 구성
 
 - **Edge (Docker)**: YOLO 및 SED 결과를 FastAPI에 POST 요청으로 전송  
-- **Receiver (Notebook, Core 역할)**: 해당 데이터를 `/stream`, `/sed` API 경로로 수신하고, 저장 및 후속 처리를 담당
+- **Receiver (Notebook, Core 역할)**: 해당 데이터를 `/yolo`, `/sed` API 경로로 수신하고, 저장 및 Event Fusion, 알람 Pop Up 수행
 
 
 ---
 
 ## 📁 예시 데이터 경로
 
-- 영상: `received_from_sender/video/`  
+- 영상: `received_from_sender/image/`
+- 영상 Meta data : `received_from_sender/metadata/`  
 - 오디오: `received_from_sender/audio/`
+- Fusion 알람 : `received_from_sender/alerts/`
 
 ---
+
+## ⚙️ 주요 기능
+
+### 🔹 1. FastAPI 기반 수신 서버 (`main.py`)
+
+- **역할**: Edge Device로부터 전송된 데이터 수신 및 저장
+- **지원 경로**:
+  - `POST /yolo` : 이미지 + 메타데이터 수신
+  - `POST /sed`  : 오디오 파일 수신
+- **저장 위치**: `received_from_sender/` 하위 폴더
+- **기능 요약**:
+  - 전송 성공 시 수신 로그 출력 (예: 저장 경로 포함)
+  - 수신된 파일은 타입별로 자동 분류되어 저장
+
+---
+
+### 🔸 2. 실시간 알림 팝업 시스템 (`alert_watcher.py`)
+
+- **역할**: `received_from_sender/alerts/` 폴더를 실시간 감시하여 새 이벤트 발생 시 즉시 팝업
+- **동작 방식**:
+  1. `_alert.json` 파일 생성 감지
+  2. 동일 이름의 `.jpg` 존재 확인 후 팝업 띄움
+  3. 동일 경로 중복 알림은 무시
+
+- **표시 정보**:
+  - 📅 시점 (`timestamp`) → 없으면 파일명에서 추출
+  - 📍 디바이스 ID (`device_id`)
+  - 🎯 감지 클래스 (`class`)
+  - ⚠️ 위험 레벨 (`level`)
+  - 🖼 감지 이미지 (원본 그대로 표시)
+
+- **UI 구성**:
+  - 🪟 Tkinter 팝업 창
+  - `맑은 고딕` 폰트 14pt 사용
+  - 이미지 하단 표시 (320x240 리사이즈 X → 원본 표시)
+  - 항상 위에 떠 있는 팝업 구성 가능 (`topmost=True` 옵션으로 확장 가능)
+
+---
+
 
 ✍️ 작성자
 김민수 (2025)

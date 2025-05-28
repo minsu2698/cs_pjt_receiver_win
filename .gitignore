@@ -1,24 +1,40 @@
-# Python
+# ──────────────
+# 📦 Python
+# ──────────────
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
+*.log
 
-# Conda virtual env
+# ──────────────
+# 🧪 Conda virtual env
+# ──────────────
 env/
 .venv/
 *.conda
 
-# VSCode & Jupyter
+# ──────────────
+# 🛠️ IDE & Notebook
+# ──────────────
 .vscode/
 .ipynb_checkpoints/
+*.swp
 
-# System
+# ──────────────
+# 💻 System files
+# ──────────────
 .DS_Store
 Thumbs.db
 
-# Output logs or data
+# ──────────────
+# 📂 Project Output Data
+# ──────────────
+# (기존 received_data → 실제 사용되는 received_from_sender/*로 확장)
 received_data/
-
-# OS
-*.swp
+received_from_sender/audio/
+received_from_sender/video/
+received_from_sender/image/
+received_from_sender/metadata/
+received_from_sender/alerts/*.json
+received_from_sender/alerts/*.jpg
