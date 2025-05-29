@@ -30,11 +30,15 @@ Thumbs.db
 # ──────────────
 # 📂 Project Output Data
 # ──────────────
-# 🔒 received_from_sender 내부 내용은 무시하되, 폴더와 .gitkeep은 포함
-received_from_sender/*
+
+# 📁 1. 모든 내용 기본 무시
+received_from_sender/**
+
+# 📂 2. 폴더 구조 + .gitkeep만 허용
 !received_from_sender/**/
 !received_from_sender/**/.gitkeep
 
-# 🔕 선택적으로 무시할 수 있는 파일 패턴 (아래는 필요시 주석 해제)
-received_from_sender/alerts/*.jpg
-received_from_sender/alerts/*.json
+# 🔕 3. 확실하게 무시하고 싶은 확장자 (명시적)
+*.wav
+*.jpg
+*.json

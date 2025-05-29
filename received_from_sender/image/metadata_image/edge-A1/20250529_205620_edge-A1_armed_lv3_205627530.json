@@ -1,7 +1,0 @@
-{
-  "event_time": "2025-05-29T20:56:26.925435+09:00",
-  "event_type": "YOLO",
-  "level": "Level3",
-  "class": "armed",
-  "device_id": "edge-A1"
-}
