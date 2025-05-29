@@ -30,11 +30,11 @@ Thumbs.db
 # ──────────────
 # 📂 Project Output Data
 # ──────────────
-# (기존 received_data → 실제 사용되는 received_from_sender/*로 확장)
-received_data/
-received_from_sender/audio/
-received_from_sender/video/
-received_from_sender/image/
-received_from_sender/metadata/
-received_from_sender/alerts/*.json
+# 🔒 received_from_sender 내부 내용은 무시하되, 폴더와 .gitkeep은 포함
+received_from_sender/*
+!received_from_sender/**/
+!received_from_sender/**/.gitkeep
+
+# 🔕 선택적으로 무시할 수 있는 파일 패턴 (아래는 필요시 주석 해제)
 received_from_sender/alerts/*.jpg
+received_from_sender/alerts/*.json

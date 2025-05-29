@@ -233,19 +233,38 @@ from collections import defaultdict
 
 app = FastAPI()
 
+# # 📁 저장 경로 설정
+# BASE_DIR = "received_from_sender"
+# #VIDEO_DIR = os.path.join(BASE_DIR, "video")       # 스트리밍 프레임 저장 경로
+# AUDIO_DIR = os.path.join(BASE_DIR, "audio")       # SED 오디오 저장 경로
+# Y_IMAGE_DIR = os.path.join(BASE_DIR, "image")     # YOLO 이미지 저장 경로
+# Y_META_DIR = os.path.join(BASE_DIR, "metadata")   # YOLO 메타 저장 경로
+# ALERT_DIR = os.path.join(BASE_DIR, "alerts")      # Fusion 후 알람 저장 경로
+
+# #os.makedirs(VIDEO_DIR, exist_ok=True)
+# os.makedirs(AUDIO_DIR, exist_ok=True)
+# os.makedirs(Y_IMAGE_DIR, exist_ok=True)
+# os.makedirs(Y_META_DIR, exist_ok=True)
+# os.makedirs(ALERT_DIR, exist_ok=True)
+
 # 📁 저장 경로 설정
 BASE_DIR = "received_from_sender"
-VIDEO_DIR = os.path.join(BASE_DIR, "video")       # 스트리밍 프레임 저장 경로
-AUDIO_DIR = os.path.join(BASE_DIR, "audio")       # SED 오디오 저장 경로
-Y_IMAGE_DIR = os.path.join(BASE_DIR, "image")     # YOLO 이미지 저장 경로
-Y_META_DIR = os.path.join(BASE_DIR, "metadata")   # YOLO 메타 저장 경로
-ALERT_DIR = os.path.join(BASE_DIR, "alerts")      # Fusion 후 알람 저장 경로
 
-os.makedirs(VIDEO_DIR, exist_ok=True)
-os.makedirs(AUDIO_DIR, exist_ok=True)
-os.makedirs(Y_IMAGE_DIR, exist_ok=True)
-os.makedirs(Y_META_DIR, exist_ok=True)
-os.makedirs(ALERT_DIR, exist_ok=True)
+# YOLO
+IMAGE_DIR = os.path.join(BASE_DIR, "image")
+IMAGE_META_DIR = os.path.join(IMAGE_DIR, "metadata_image")
+
+# SED
+AUDIO_DIR = os.path.join(BASE_DIR, "audio")
+AUDIO_META_DIR = os.path.join(AUDIO_DIR, "meta_audio")
+
+#ALERT_DIR
+ALERT_DIR = os.path.join(BASE_DIR, "alerts")
+
+# 폴더 생성
+for folder in [IMAGE_DIR, IMAGE_META_DIR, AUDIO_DIR, AUDIO_META_DIR, ALERT_DIR]:
+    os.makedirs(folder, exist_ok=True)
+
 
 # 🧠 Fusion Dictionary: 슬롯 단위로 YOLO/SED 이벤트 수집
 fusion_dict = defaultdict(lambda: {"yolo": [], "sed": None})
@@ -321,34 +340,89 @@ async def root():
 
 # ✅ 2. SED 오디오 수신
 @app.post("/sed")
-async def receive_sed(file: UploadFile = File(...)):
+# async def receive_sed(file: UploadFile = File(...)):
+#     try:
+#         data = await file.read()
+#         timestamp = datetime.now()
+#         slot_key = get_time_slot_key(timestamp)
+#         fname = f"audio_{slot_key}.wav"
+#         save_path = os.path.join(AUDIO_DIR, fname)
+
+#         with open(save_path, "wb") as f:
+#             f.write(data)
+
+#         # Fusion 기록 (Level은 placeholder)
+#         fusion_dict[slot_key]["sed"] = {
+#             "audio_path": save_path,
+#             "level": 0
+#         }
+#         try_fusion(slot_key)
+
+#         print(f"🎧 오디오 수신 완료: {save_path}")
+#         return {"status": "success", "path": save_path, "length": len(data)}
+
+#     except Exception as e:
+#         print("❌ 예외 발생 (/sed):", e)
+#         return {"status": "error", "detail": str(e)}
+async def receive_sed(json_str: str = Form(...), file: UploadFile = File(...)):
     try:
-        data = await file.read()
-        timestamp = datetime.now()
-        slot_key = get_time_slot_key(timestamp)
-        fname = f"audio_{slot_key}.wav"
-        save_path = os.path.join(AUDIO_DIR, fname)
+        # 1️⃣ 메타데이터 파싱
+        payload = json.loads(json_str.strip())
+        event_time = datetime.fromisoformat(payload.get("event_time"))
+        slot_key = get_time_slot_key(event_time)
 
-        with open(save_path, "wb") as f:
-            f.write(data)
+        device_id = payload.get("device_id", "unknown")
+        cls = payload.get("class", "unknown")
+        level_raw = str(payload.get("level", "Level0")).strip()
 
-        # Fusion 기록 (Level은 placeholder)
+        # 2️⃣ level 파싱 ("Level3" → 3)
+        if level_raw.lower().startswith("level") and level_raw[5:].isdigit():
+            level = int(level_raw[5:])
+        else:
+            level = int(level_raw)
+
+        # 3️⃣ 파일 저장 경로 정의
+        now_str = datetime.now().strftime('%H%M%S%f')[:-3]
+        filename_prefix = f"{slot_key}_{device_id}_{cls}_lv{level}_{now_str}"
+
+        # 2️⃣ 디바이스별 디렉토리 생성
+        audio_dir = os.path.join(AUDIO_DIR, device_id)
+        meta_dir = os.path.join(AUDIO_META_DIR, device_id)
+        os.makedirs(audio_dir, exist_ok=True)
+        os.makedirs(meta_dir, exist_ok=True)
+
+        # 4️⃣ 저장 경로 구성
+        audio_path = os.path.join(audio_dir, f"{filename_prefix}.wav")
+        meta_path = os.path.join(meta_dir, f"{filename_prefix}.json")
+
+        # 5️⃣ 오디오 파일 저장
+        file.file.seek(0)
+        with open(audio_path, "wb") as f:
+            shutil.copyfileobj(file.file, f)
+
+        # 6️⃣ 메타데이터 저장
+        with open(meta_path, "w") as f:
+            json.dump(payload, f, indent=2)
+
+        # 7️⃣ Fusion 등록
         fusion_dict[slot_key]["sed"] = {
-            "audio_path": save_path,
-            "level": 0
+            "audio_path": audio_path,
+            "level": level,
+            "meta": payload
         }
         try_fusion(slot_key)
 
-        print(f"🎧 오디오 수신 완료: {save_path}")
-        return {"status": "success", "path": save_path, "length": len(data)}
+        print(f"✅ SED 이벤트 수신 완료: {audio_path}, {meta_path}")
+        return {"status": "success", "audio": audio_path, "meta": meta_path}
 
     except Exception as e:
-        print("❌ 예외 발생 (/sed):", e)
-        return {"status": "error", "detail": str(e)}
+        print(f"❌ 예외 발생 (/sed): {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
 
 # ✅ 3. YOLO Trigger 이벤트 수신
 @app.post("/yolo")
 async def receive_yolo(json_str: str = Form(...), image: UploadFile = File(...)):
+    #print("📩 [YOLO] /yolo 요청 수신됨")  # ✅ 이 로그 반드시 확인
     try:
         data = json.loads(json_str)
         #event_time = datetime.strptime(data["event_time"], "%Y-%m-%d %H:%M:%S")
@@ -369,8 +443,8 @@ async def receive_yolo(json_str: str = Form(...), image: UploadFile = File(...))
         now_str = datetime.now().strftime('%H%M%S%f')[:-3]
         filename_prefix = f"{slot_key}_{device_id}_{cls}_lv{level}_{now_str}"
 
-        img_dir = os.path.join(Y_IMAGE_DIR, device_id)
-        meta_dir = os.path.join(Y_META_DIR, device_id)
+        img_dir = os.path.join(IMAGE_DIR, device_id)
+        meta_dir = os.path.join(IMAGE_META_DIR, device_id)
         os.makedirs(img_dir, exist_ok=True)
         os.makedirs(meta_dir, exist_ok=True)
 
