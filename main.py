@@ -275,37 +275,132 @@ def get_time_slot_key(event_time: datetime) -> str:
     return slot_start.strftime("%Y%m%d_%H%M%S")
 
 # 알람 저장 함수: 가장 높은 Level의 이벤트만 기록
-def save_alert(image_path: str, metadata: dict):
+# def save_alert(image_path: str, metadata: dict):
+#     fname = os.path.basename(image_path)
+#     alert_img = os.path.join(ALERT_DIR, fname)
+#     alert_json = os.path.join(ALERT_DIR, fname.replace(".jpg", ".json"))
+
+#     # 필수 Fusion 필드 추가
+#     metadata["fusion_device_id"] = metadata.get("device_id", "unknown")
+#     metadata["fusion_level"] = metadata.get("level", -1)
+#     metadata["fusion_time"] = metadata.get("event_time", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+
+#     shutil.copy(image_path, alert_img)
+#     with open(alert_json, "w") as f:
+#         json.dump(metadata, f, indent=2)
+
+#     print(f"\n🚨 [ALERT 발생] Level {metadata['fusion_level']} 이상")
+#     print(f"📸 Image : {alert_img}")
+#     print(f"📄 Meta  : {alert_json}\n")
+
+def save_alert(image_path: str, meta: dict, sed_info: dict = None):
+    """
+    알람 발생 시 `.jpg`, `.json`, `.wav` (옵션)를 alerts 폴더에 저장하고 로그 출력
+    """
+
     fname = os.path.basename(image_path)
     alert_img = os.path.join(ALERT_DIR, fname)
     alert_json = os.path.join(ALERT_DIR, fname.replace(".jpg", ".json"))
 
-    # 필수 Fusion 필드 추가
-    metadata["fusion_device_id"] = metadata.get("device_id", "unknown")
-    metadata["fusion_level"] = metadata.get("level", -1)
-    metadata["fusion_time"] = metadata.get("event_time", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    try:
+        shutil.copy(image_path, alert_img)
+    except Exception as e:
+        print(f"❌ [이미지 복사 실패]: {image_path} → {alert_img}, 예외: {e}")
+        return
 
-    shutil.copy(image_path, alert_img)
-    with open(alert_json, "w") as f:
-        json.dump(metadata, f, indent=2)
+    alert_audio = None
+    if sed_info and "audio_path" in sed_info:
+        try:
+            audio_path = sed_info["audio_path"]
+            alert_audio = os.path.join(ALERT_DIR, os.path.basename(audio_path))
+            shutil.copy(audio_path, alert_audio)
+        except Exception as e:
+            print(f"❌ [오디오 복사 실패]: {audio_path} → {alert_audio}, 예외: {e}")
 
-    print(f"\n🚨 [ALERT 발생] Level {metadata['fusion_level']} 이상")
-    print(f"📸 Image : {alert_img}")
-    print(f"📄 Meta  : {alert_json}\n")
+    # JSON 메타 구성
+    alert_meta = {
+        "fusion_time": meta.get("event_time"),
+        "fusion_device_id": meta.get("device_id"),
+        "fusion_level": meta.get("level"),
+        "yolo_class": meta.get("class"),
+        "yolo_level": meta.get("level"),
+        "yolo_image": alert_img,
+    }
+
+    if alert_audio:
+        alert_meta.update({
+            "sed_class": sed_info.get("meta", {}).get("class", "unknown"),
+            "sed_level": sed_info.get("level"),
+            "sed_audio": alert_audio
+        })
+
+    try:
+        with open(alert_json, "w") as f:
+            json.dump(alert_meta, f, indent=2)
+    except Exception as e:
+        print(f"❌ [메타 저장 실패]: {alert_json}, 예외: {e}")
+        return
+
+    print(f"\n🚨 [ALERT 발생] Fusion Level: {alert_meta['fusion_level']}")
+    print(f"📸 저장됨: {alert_img}")
+    if alert_audio:
+        print(f"🎧 저장됨: {alert_audio}")
+    print(f"📄 메타 저장됨: {alert_json}")
+
 
 # Fusion 판단 함수: 슬롯 내 가장 높은 Level 이벤트만 알람으로 저장
+# def try_fusion(slot_key: str):
+#     entry = fusion_dict[slot_key]
+#     yolo_events = entry["yolo"]
+
+#     if not yolo_events:
+#         return  # YOLO 이벤트 없음
+
+#     # Level이 가장 높은 이벤트 선택
+#     top_event = max(yolo_events, key=lambda x: x["level"])
+
+#     if top_event["level"] >= 3:
+#         save_alert(top_event["img_path"], top_event["meta"])
+
 def try_fusion(slot_key: str):
+    """
+    특정 시간 슬롯(slot_key)에 대해 YOLO + SED 조합으로 알람 판단 후 발생시키는 함수
+    - 기준 1: YOLO level ≥ 3
+    - 기준 2: YOLO level ≥ 2 AND SED level ≥ 3 (and 조건)
+    - 그 외는 알람 발생하지 않음
+    """
+
     entry = fusion_dict[slot_key]
-    yolo_events = entry["yolo"]
+    yolo_events = entry.get("yolo", [])
+    sed = entry.get("sed")
 
     if not yolo_events:
-        return  # YOLO 이벤트 없음
+        print(f"❌ [Fusion Skipped] 슬롯 {slot_key}: YOLO 이벤트 없음")
+        return
 
-    # Level이 가장 높은 이벤트 선택
-    top_event = max(yolo_events, key=lambda x: x["level"])
+    top_yolo = max(yolo_events, key=lambda x: x["level"])
+    yolo_level = top_yolo["level"]
+    sed_level = sed["level"] if sed else 0
 
-    if top_event["level"] >= 3:
-        save_alert(top_event["img_path"], top_event["meta"])
+    print(f"🔍 [Fusion Slot: {slot_key}] YOLO Level: {yolo_level}, SED Level: {sed_level}")
+
+    # Fusion 조건
+    if yolo_level >= 3:
+        fusion_level = yolo_level
+        print(f"✅ [ALERT 조건 만족] YOLO 단독 Level {yolo_level} ≥ 3")
+        top_yolo["meta"]["level"] = fusion_level
+        save_alert(top_yolo["img_path"], top_yolo["meta"], sed_info=sed)
+
+    elif yolo_level >= 2 and sed_level >= 2:
+        fusion_level = max(yolo_level, sed_level)
+        print(f"✅ [ALERT 조건 만족] YOLO Level {yolo_level} + SED Level {sed_level} (and 조건)")
+        top_yolo["meta"]["level"] = fusion_level
+        save_alert(top_yolo["img_path"], top_yolo["meta"], sed_info=sed)
+
+    else:
+        print(f"🚫 [No Alert] YOLO/SED 조건 불충족 - 알람 없음")
+
+
 
 @app.get("/", response_class=HTMLResponse)
 async def root():

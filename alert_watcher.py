@@ -2,6 +2,7 @@ import os
 import json
 import cv2
 import time
+import pygame  # ✅ 추가
 from PIL import Image, ImageTk
 import tkinter as tk
 from watchdog.observers import Observer
@@ -11,6 +12,16 @@ from watchdog.events import FileSystemEventHandler
 ALERT_DIR = os.path.join("received_from_sender", "alerts")
 seen_files = set()  # ✅ 중복 알람 방지용
 
+# ✅ 오디오 재생 함수
+def play_audio(audio_path):
+    try:
+        pygame.mixer.init()
+        pygame.mixer.music.load(audio_path)
+        pygame.mixer.music.play()
+    except Exception as e:
+        print(f"❌ 오디오 재생 실패: {e}")
+
+
 def show_alert_popup(json_path, image_path):
     try:
         with open(json_path, 'r') as f:
@@ -18,6 +29,12 @@ def show_alert_popup(json_path, image_path):
     except Exception as e:
         print(f"❌ JSON 파싱 실패: {e}")
         return
+
+    # ✅ SED 오디오가 존재하면 바로 재생
+    audio_path = meta.get("sed_audio")
+    if audio_path and os.path.exists(audio_path):
+        print(f"🔊 오디오 재생: {audio_path}")
+        play_audio(audio_path)
 
     root = tk.Tk()
     root.title("🚨 Fusion Alert")
@@ -48,9 +65,9 @@ def show_alert_popup(json_path, image_path):
     text = f"""🟥 총격 경보 발생
 
 📅 시점: {timestamp}
-📍 디바이스: {meta.get('device_id', 'Unknown')}
-🎯 클래스: {meta.get('class', 'Unknown')}
-⚠️ 레벨: {meta.get('level', 'Unknown')}"""
+📍 디바이스: {meta.get('fusion_device_id', 'Unknown')}
+🎯 클래스: {meta.get('yolo_class', 'Unknown')}
+⚠️ 레벨: {meta.get('fusion_level', 'Unknown')}"""
 
     label = tk.Label(root, text=text, font=("맑은 고딕", 14), justify="left")
     label.pack(pady=10)
